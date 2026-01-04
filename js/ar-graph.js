@@ -145,6 +145,9 @@ function initARScene() {
 
     // Setup AR controls with interaction
     setupARControls();
+    
+    // Setup mobile events
+    setupMobileEvents();
 
     // Initialize raycasting for AR
     raycaster = new THREE.Raycaster();
@@ -194,11 +197,30 @@ function init3DScene() {
     raycaster = new THREE.Raycaster();
     mouse = new THREE.Vector2();
     setup3DControls();
+    
+    // Setup mobile events
+    setupMobileEvents();
 
     // Start animation
     animate3D();
 
     document.getElementById('mode-indicator').textContent = '🖥️ 3D Mode';
+}
+
+function setupMobileEvents() {
+    // Double-tap to reset view
+    let lastTap = 0;
+    renderer.domElement.addEventListener('touchend', function(e) {
+        const currentTime = new Date().getTime();
+        const tapLength = currentTime - lastTap;
+        
+        if (tapLength < 500 && tapLength > 0 && e.touches.length === 0) {
+            // Double tap detected
+            resetView();
+            if (e.cancelable) e.preventDefault();
+        }
+        lastTap = currentTime;
+    });
 }
 
 function createGraph() {
@@ -305,7 +327,10 @@ function setupARControls() {
 }
 
 function handleTouchStart(e) {
-    e.preventDefault();
+    // Only prevent default for multi-touch gestures
+    if (e.touches.length >= 2) {
+        e.preventDefault();
+    }
     
     if (currentMode === 'ar' && e.touches.length === 2) {
         // Pinch gesture start
@@ -330,13 +355,15 @@ function handleTouchStart(e) {
         
         if (intersects.length > 0) {
             onNodeSelect(intersects[0].object);
-            e.preventDefault();
+            if (e.cancelable) e.preventDefault();
         }
     }
 }
 
 function handleTouchMove(e) {
-    e.preventDefault();
+    if (e.touches.length >= 2) {
+        e.preventDefault();
+    }
     
     if (currentMode === 'ar' && e.touches.length === 2 && graphGroup.visible) {
         // Pinch to zoom
@@ -349,8 +376,8 @@ function handleTouchMove(e) {
             const newScale = renderer.domElement.userData.pinchStartScale * scaleFactor;
             
             // Limit scaling
-            const minScale = currentMode === 'ar' ? 0.3 : 0.1;
-            const maxScale = currentMode === 'ar' ? 3 : 5;
+            const minScale = 0.1;
+            const maxScale = 5;
             
             graphGroup.scale.setScalar(Math.max(minScale, Math.min(maxScale, newScale)));
         }
@@ -360,6 +387,24 @@ function handleTouchMove(e) {
 function handleTouchEnd(e) {
     renderer.domElement.userData.pinchStartDistance = null;
     renderer.domElement.userData.pinchStartScale = null;
+    
+    // Add single tap detection for node selection
+    if (e.changedTouches.length === 1 && graphGroup.visible && currentMode === 'ar') {
+        const touch = e.changedTouches[0];
+        const rect = renderer.domElement.getBoundingClientRect();
+        
+        // Calculate normalized device coordinates
+        mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+        
+        // Update raycaster
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObjects(nodes);
+        
+        if (intersects.length > 0) {
+            onNodeSelect(intersects[0].object);
+        }
+    }
 }
 
 function onARSelect() {
@@ -439,7 +484,9 @@ function setup3DControls() {
 
     // Touch controls for mobile
     renderer.domElement.addEventListener('touchstart', (e) => {
-        e.preventDefault();
+        if (e.touches.length >= 2) {
+            e.preventDefault();
+        }
         
         if (e.touches.length === 2) {
             // Pinch gesture start
@@ -454,7 +501,9 @@ function setup3DControls() {
     });
 
     renderer.domElement.addEventListener('touchmove', (e) => {
-        e.preventDefault();
+        if (e.touches.length >= 2) {
+            e.preventDefault();
+        }
         
         if (e.touches.length === 2) {
             // Pinch to zoom
@@ -467,8 +516,8 @@ function setup3DControls() {
                 const newScale = initialScale * scaleFactor;
                 
                 // Limit scaling
-                const minScale = currentMode === 'ar' ? 0.3 : 0.1;
-                const maxScale = currentMode === 'ar' ? 3 : 5;
+                const minScale = 0.1;
+                const maxScale = 5;
                 
                 graphGroup.scale.setScalar(Math.max(minScale, Math.min(maxScale, newScale)));
             }
@@ -521,10 +570,13 @@ function onNodeSelect(node) {
     // Show node info
     displayNodeInfo(node.userData);
     
+    // Make sure info panel is visible on mobile
+    document.getElementById('node-info').style.display = 'block';
+    
     // Visual feedback
+    const originalColor = nodeColors[node.userData.type] || nodeColors.default;
     node.material.color.setHex(0xffffff);
     setTimeout(() => {
-        const originalColor = nodeColors[node.userData.type] || nodeColors.default;
         node.material.color.setHex(originalColor);
     }, 300);
 }
@@ -563,6 +615,23 @@ function displayNodeInfo(data) {
         .info-item { margin-bottom: 6px; }
         .info-section { margin-top: 12px; margin-bottom: 6px; color: #ff6b6b; }
         .property { margin-left: 10px; margin-bottom: 4px; font-size: 0.9em; word-break: break-word; }
+        #node-info {
+            display: block !important;
+            position: fixed;
+            bottom: 120px;
+            left: 10px;
+            right: 10px;
+            max-height: 30vh;
+            overflow-y: auto;
+            background: rgba(10, 10, 10, 0.95);
+            border: 1px solid #4ecdc4;
+            padding: 15px;
+            z-index: 1000;
+            border-radius: 8px;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+        }
     `;
     
     // Remove existing style if any
@@ -634,6 +703,9 @@ function showUI() {
     if (currentMode === '3d') {
         document.querySelector('.legend').style.display = 'block';
     }
+    
+    // Ensure node info is properly displayed
+    document.getElementById('node-info').style.display = 'block';
 }
 
 window.resetView = function() {
@@ -652,13 +724,15 @@ window.resetView = function() {
     }
     
     document.getElementById('node-info').innerHTML = 'Tap on a node to see details';
+    document.getElementById('node-info').style.display = 'block';
 };
 
 window.zoomIn = function() {
     if (currentMode === '3d') {
         camera.position.z = Math.max(5, camera.position.z - 3);
     } else if (currentMode === 'ar' && graphGroup.visible) {
-        graphGroup.scale.multiplyScalar(1.2);
+        const newScale = graphGroup.scale.x * 1.2;
+        graphGroup.scale.setScalar(Math.max(0.1, Math.min(5, newScale)));
     }
 };
 
@@ -666,7 +740,8 @@ window.zoomOut = function() {
     if (currentMode === '3d') {
         camera.position.z = Math.min(100, camera.position.z + 3);
     } else if (currentMode === 'ar' && graphGroup.visible) {
-        graphGroup.scale.multiplyScalar(0.8);
+        const newScale = graphGroup.scale.x * 0.8;
+        graphGroup.scale.setScalar(Math.max(0.1, Math.min(5, newScale)));
     }
 };
 
@@ -692,3 +767,41 @@ window.addEventListener('orientationchange', () => {
         }
     }, 200);
 });
+
+// Add touch-friendly CSS for mobile controls
+const mobileCSS = `
+    #controls button {
+        min-width: 50px;
+        min-height: 50px;
+        padding: 12px;
+        margin: 8px;
+        font-size: 18px;
+        background: rgba(30, 30, 30, 0.9);
+        border: 2px solid #4ecdc4;
+        border-radius: 10px;
+        color: white;
+        cursor: pointer;
+    }
+    
+    #controls button:hover, #controls button:active {
+        background: rgba(78, 205, 196, 0.3);
+    }
+    
+    #mode-indicator {
+        font-size: 20px;
+        padding: 12px;
+        background: rgba(30, 30, 30, 0.9);
+        border-radius: 8px;
+        margin: 10px;
+    }
+    
+    .legend-item {
+        padding: 8px 12px;
+        margin: 5px;
+        font-size: 14px;
+    }
+`;
+
+const styleEl = document.createElement('style');
+styleEl.textContent = mobileCSS;
+document.head.appendChild(styleEl);
