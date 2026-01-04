@@ -11,6 +11,7 @@ let currentMode = null;
 let reticle;
 let hitTestSource = null;
 let hitTestSourceRequested = false;
+let touchStartDistance = 0;
 
 const nodeColors = {
     'Document': 0xff6b6b,
@@ -164,7 +165,13 @@ function init3DScene() {
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
-    document.getElementById('container').appendChild(renderer.domElement);
+    
+    // Make canvas touch-friendly
+    const canvas = renderer.domElement;
+    canvas.style.touchAction = 'none';
+    canvas.style.display = 'block';
+    
+    document.getElementById('container').appendChild(canvas);
 
     // Lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -302,87 +309,97 @@ function onARSelect() {
 
 function setup3DControls() {
     let isDragging = false;
-    let isSelecting = true;
     let previousMousePosition = { x: 0, y: 0 };
-    let dragDistance = 0;
-
-    // MOUSE CONTROLS
-    renderer.domElement.addEventListener('mousedown', (e) => {
+    let touchStartTime = 0;
+    let lastTouchX = 0;
+    let lastTouchY = 0;
+    
+    // Clear any existing event listeners first
+    const canvas = renderer.domElement;
+    canvas.style.touchAction = 'none'; // Disable browser touch actions
+    
+    // MOUSE CONTROLS (for desktop)
+    canvas.addEventListener('mousedown', onMouseDown);
+    canvas.addEventListener('mousemove', onMouseMove);
+    canvas.addEventListener('mouseup', onMouseUp);
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    
+    // TOUCH CONTROLS - SIMPLIFIED AND FIXED
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+    canvas.addEventListener('touchend', onTouchEnd, { passive: false });
+    canvas.addEventListener('touchcancel', onTouchEnd, { passive: false });
+    
+    // Prevent context menu on long press
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    
+    function onMouseDown(e) {
         isDragging = true;
-        isSelecting = true;
-        dragDistance = 0;
         previousMousePosition = { x: e.clientX, y: e.clientY };
-    });
-
-    renderer.domElement.addEventListener('mousemove', (e) => {
-        if (isDragging) {
-            const deltaX = e.clientX - previousMousePosition.x;
-            const deltaY = e.clientY - previousMousePosition.y;
-            
-            dragDistance += Math.abs(deltaX) + Math.abs(deltaY);
-            
-            // If moved more than 10px, it's a drag not a click
-            if (dragDistance > 10) {
-                isSelecting = false;
-            }
-
-            graphGroup.rotation.y += deltaX * 0.01;
-            graphGroup.rotation.x += deltaY * 0.01;
-
-            previousMousePosition = { x: e.clientX, y: e.clientY };
-        }
-    });
-
-    renderer.domElement.addEventListener('mouseup', (e) => {
-        if (isDragging && isSelecting && dragDistance < 10) {
+        e.preventDefault();
+    }
+    
+    function onMouseMove(e) {
+        if (!isDragging) return;
+        
+        const deltaX = e.clientX - previousMousePosition.x;
+        const deltaY = e.clientY - previousMousePosition.y;
+        
+        graphGroup.rotation.y += deltaX * 0.01;
+        graphGroup.rotation.x += deltaY * 0.01;
+        
+        previousMousePosition = { x: e.clientX, y: e.clientY };
+        e.preventDefault();
+    }
+    
+    function onMouseUp(e) {
+        if (!isDragging) {
+            // Handle click
             onNodeClick(e);
         }
         isDragging = false;
-        isSelecting = false;
-        dragDistance = 0;
-    });
-
-    renderer.domElement.addEventListener('wheel', (e) => {
+        e.preventDefault();
+    }
+    
+    function onWheel(e) {
         e.preventDefault();
         camera.position.z += e.deltaY * 0.01;
         camera.position.z = Math.max(5, Math.min(100, camera.position.z));
-    }, { passive: false });
-
-    // TOUCH CONTROLS - FIXED FOR MOBILE
-    let touchStartDistance = 0;
-    let touchStartTime = 0;
-    let touchMoved = false;
-    let lastTap = 0;
-
-    renderer.domElement.addEventListener('touchstart', (e) => {
-        touchStartTime = Date.now();
-        touchMoved = false;
+    }
+    
+    // TOUCH HANDLERS
+    function onTouchStart(e) {
+        e.preventDefault();
         
         if (e.touches.length === 1) {
-            previousMousePosition = { 
-                x: e.touches[0].clientX, 
-                y: e.touches[0].clientY 
-            };
-            
-            // Double tap detection
-            const now = Date.now();
-            if (now - lastTap < 300) {
-                e.preventDefault();
-                onNodeTouch(e.touches[0]);
-            }
-            lastTap = now;
+            // Single touch - start rotation or tap
+            const touch = e.touches[0];
+            lastTouchX = touch.clientX;
+            lastTouchY = touch.clientY;
+            touchStartTime = Date.now();
         } else if (e.touches.length === 2) {
+            // Two touches - start pinch zoom
             const dx = e.touches[0].clientX - e.touches[1].clientX;
             const dy = e.touches[0].clientY - e.touches[1].clientY;
             touchStartDistance = Math.sqrt(dx * dx + dy * dy);
         }
-    }, { passive: false });
-
-    renderer.domElement.addEventListener('touchmove', (e) => {
+    }
+    
+    function onTouchMove(e) {
         e.preventDefault();
-        touchMoved = true;
         
-        if (e.touches.length === 2) {
+        if (e.touches.length === 1) {
+            // Single finger rotation
+            const touch = e.touches[0];
+            const deltaX = touch.clientX - lastTouchX;
+            const deltaY = touch.clientY - lastTouchY;
+            
+            graphGroup.rotation.y += deltaX * 0.01;
+            graphGroup.rotation.x += deltaY * 0.01;
+            
+            lastTouchX = touch.clientX;
+            lastTouchY = touch.clientY;
+        } else if (e.touches.length === 2) {
             // Pinch zoom
             const dx = e.touches[0].clientX - e.touches[1].clientX;
             const dy = e.touches[0].clientY - e.touches[1].clientY;
@@ -393,34 +410,73 @@ function setup3DControls() {
                 camera.position.z -= delta * 0.02;
                 camera.position.z = Math.max(5, Math.min(100, camera.position.z));
             }
-            
             touchStartDistance = distance;
-        } else if (e.touches.length === 1) {
-            // Single finger rotation
-            const deltaX = e.touches[0].clientX - previousMousePosition.x;
-            const deltaY = e.touches[0].clientY - previousMousePosition.y;
-
-            graphGroup.rotation.y += deltaX * 0.01;
-            graphGroup.rotation.x += deltaY * 0.01;
-
-            previousMousePosition = { 
-                x: e.touches[0].clientX, 
-                y: e.touches[0].clientY 
-            };
         }
-    }, { passive: false });
-
-    renderer.domElement.addEventListener('touchend', (e) => {
-        const touchDuration = Date.now() - touchStartTime;
+    }
+    
+    function onTouchEnd(e) {
+        e.preventDefault();
         
-        // Single tap detection (not moved much, quick tap)
-        if (e.changedTouches.length === 1 && !touchMoved && touchDuration < 300) {
-            onNodeTouch(e.changedTouches[0]);
+        // Check if this was a tap (not a drag)
+        if (e.touches.length === 0 && e.changedTouches.length === 1) {
+            const touchDuration = Date.now() - touchStartTime;
+            
+            // Only trigger node selection if it was a short tap (< 300ms)
+            if (touchDuration < 300) {
+                const touch = e.changedTouches[0];
+                
+                // Convert touch to normalized device coordinates
+                mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
+                
+                // Raycast for node selection
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(nodes);
+                
+                if (intersects.length > 0) {
+                    // Handle node selection
+                    selectNode(intersects[0].object);
+                } else {
+                    // Deselect if tapping empty space
+                    if (selectedNode) {
+                        deselectNode();
+                    }
+                }
+            }
         }
         
         touchStartDistance = 0;
-        touchMoved = false;
-    }, { passive: false });
+    }
+}
+
+function selectNode(node) {
+    // Deselect previous node
+    if (selectedNode) {
+        deselectNode();
+    }
+    
+    // Select new node
+    selectedNode = node;
+    selectedNode.material.emissiveIntensity = 0.6;
+    selectedNode.scale.set(1.3, 1.3, 1.3);
+    displayNodeInfo(selectedNode.userData);
+    
+    // Show info panel
+    document.getElementById('info-panel').style.display = 'block';
+    
+    // Haptic feedback on mobile
+    if (navigator.vibrate) {
+        navigator.vibrate(30);
+    }
+}
+
+function deselectNode() {
+    if (selectedNode) {
+        selectedNode.material.emissiveIntensity = 0.3;
+        selectedNode.scale.set(1, 1, 1);
+        selectedNode = null;
+        document.getElementById('node-info').innerHTML = 'Tap on a node to see details';
+    }
 }
 
 function onNodeClick(event) {
@@ -430,73 +486,37 @@ function onNodeClick(event) {
     raycaster.setFromCamera(mouse, camera);
     const intersects = raycaster.intersectObjects(nodes);
 
-    if (selectedNode) {
-        selectedNode.material.emissiveIntensity = 0.3;
-        selectedNode.scale.set(1, 1, 1);
-    }
-
     if (intersects.length > 0) {
-        selectedNode = intersects[0].object;
-        selectedNode.material.emissiveIntensity = 0.6;
-        selectedNode.scale.set(1.3, 1.3, 1.3);
-        displayNodeInfo(selectedNode.userData);
-        
-        // Show info panel on mobile
-        const infoPanel = document.getElementById('info-panel');
-        infoPanel.style.display = 'block';
-    }
-}
-
-function onNodeTouch(touch) {
-    // Convert touch to normalized coordinates
-    mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
-
-    raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObjects(nodes);
-
-    if (selectedNode) {
-        selectedNode.material.emissiveIntensity = 0.3;
-        selectedNode.scale.set(1, 1, 1);
-    }
-
-    if (intersects.length > 0) {
-        selectedNode = intersects[0].object;
-        selectedNode.material.emissiveIntensity = 0.6;
-        selectedNode.scale.set(1.3, 1.3, 1.3);
-        displayNodeInfo(selectedNode.userData);
-        
-        // Show info panel
-        const infoPanel = document.getElementById('info-panel');
-        infoPanel.style.display = 'block';
-        
-        // Haptic feedback if available
-        if (navigator.vibrate) {
-            navigator.vibrate(50);
+        selectNode(intersects[0].object);
+    } else {
+        if (selectedNode) {
+            deselectNode();
         }
     }
 }
 
 function displayNodeInfo(data) {
     let html = `
-        <div style="margin-bottom: 10px;">
-            <strong>Type:</strong> ${data.type}
+        <div class="property">
+            <strong>Type:</strong> ${data.type || 'N/A'}
         </div>
-        <div style="margin-bottom: 10px;">
-            <strong>Label:</strong> ${data.label}
+        <div class="property">
+            <strong>Label:</strong> ${data.label || 'N/A'}
         </div>
     `;
 
     if (data.source_doc) {
-        html += `<div style="margin-bottom: 10px;"><strong>Source:</strong> ${data.source_doc}</div>`;
+        html += `<div class="property"><strong>Source:</strong> ${data.source_doc}</div>`;
     }
 
     if (data.properties) {
-        html += '<div style="margin-top: 10px;"><strong>Properties:</strong></div>';
+        html += '<div style="margin: 10px 0 5px 0; color: #667eea;"><strong>Properties:</strong></div>';
+        let propCount = 0;
         for (const [key, value] of Object.entries(data.properties)) {
+            if (propCount++ > 3) break; // Limit properties on mobile
             const displayValue = Array.isArray(value) ? value.join(', ') : 
-                                (typeof value === 'string' && value.length > 100) ? 
-                                value.substring(0, 100) + '...' : value;
+                                (typeof value === 'string' && value.length > 50) ? 
+                                value.substring(0, 50) + '...' : value;
             html += `<div class="property"><strong>${key}:</strong> ${displayValue}</div>`;
         }
     }
@@ -572,13 +592,7 @@ window.resetView = function() {
         graphGroup.rotation.set(0, 0, 0);
     }
     
-    if (selectedNode) {
-        selectedNode.material.emissiveIntensity = 0.3;
-        selectedNode.scale.set(1, 1, 1);
-        selectedNode = null;
-    }
-    
-    document.getElementById('node-info').innerHTML = 'Click/tap on a node to see details';
+    deselectNode();
 };
 
 window.zoomIn = function() {
@@ -602,7 +616,26 @@ window.exitMode = function() {
 };
 
 window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    if (camera && renderer) {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
 });
+
+// Debug helper for mobile testing
+window.enableTouchDebug = function() {
+    const canvas = document.querySelector('canvas');
+    if (!canvas) return;
+    
+    canvas.addEventListener('touchstart', (e) => {
+        console.log('Touch start:', e.touches.length, 'fingers at', 
+                   e.touches[0]?.clientX, e.touches[0]?.clientY);
+    }, { passive: true });
+    
+    canvas.addEventListener('touchmove', (e) => {
+        console.log('Touch move:', e.touches.length, 'fingers');
+    }, { passive: true });
+    
+    console.log('Touch debug enabled');
+};
