@@ -1,487 +1,641 @@
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
+// ar-graph.js - AR-enabled Knowledge Graph with Mobile Touch Support
+import { ARButton } from 'https://unpkg.com/three@0.160.0/examples/jsm/webxr/ARButton.js';
 
-body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    overflow: hidden;
-    background: #0a0a0a;
-    touch-action: none;
-}
+let scene, camera, renderer, raycaster, mouse;
+let nodes = [];
+let edges = [];
+let graphGroup;
+let graphData = null;
+let selectedNode = null;
+let currentMode = null;
+let reticle;
+let hitTestSource = null;
+let hitTestSourceRequested = false;
+let touchStartDistance = 0;
 
-#container {
-    width: 100vw;
-    height: 100vh;
-    position: fixed;
-    top: 0;
-    left: 0;
-}
+const nodeColors = {
+    'Document': 0xff6b6b,
+    'Chunk': 0x4ecdc4,
+    'default': 0x45b7d1
+};
 
-#loading-screen {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(10, 10, 10, 0.95);
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
-}
+// Initialize on page load
+window.addEventListener('load', () => {
+    checkARSupport();
+    loadGraphData();
+});
 
-#loading-screen p {
-    color: white;
-    font-size: 1.2em;
-    margin-top: 20px;
-}
-
-.loader {
-    border: 5px solid #333;
-    border-top: 5px solid #667eea;
-    border-radius: 50%;
-    width: 60px;
-    height: 60px;
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-#mode-selector {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(20, 20, 30, 0.98);
-    backdrop-filter: blur(20px);
-    padding: 40px;
-    border-radius: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-    z-index: 900;
-    text-align: center;
-    min-width: 350px;
-}
-
-#mode-selector h1 {
-    color: #fff;
-    margin-bottom: 10px;
-    font-size: 2em;
-}
-
-#mode-selector p {
-    color: #aaa;
-    margin-bottom: 30px;
-    font-size: 1.1em;
-}
-
-.mode-btn {
-    display: block;
-    width: 100%;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border: none;
-    padding: 20px;
-    margin: 15px 0;
-    border-radius: 12px;
-    cursor: pointer;
-    font-size: 1.3em;
-    transition: all 0.3s;
-    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
-}
-
-.mode-btn:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 12px 35px rgba(102, 126, 234, 0.6);
-}
-
-.mode-btn:active {
-    transform: translateY(-1px);
-}
-
-.mode-desc {
-    display: block;
-    font-size: 0.6em;
-    opacity: 0.9;
-    margin-top: 5px;
-}
-
-#ar-support-msg {
-    margin-top: 20px;
-    padding: 15px;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 8px;
-    color: #aaa;
-    font-size: 0.9em;
-}
-
-#info-panel {
-    position: absolute;
-    top: 20px;
-    left: 20px;
-    background: rgba(20, 20, 30, 0.95);
-    backdrop-filter: blur(10px);
-    padding: 20px;
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    max-width: 350px;
-    max-height: 60vh;
-    overflow-y: auto;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-    z-index: 100;
-}
-
-#info-panel h2 {
-    margin: 0 0 15px 0;
-    color: #fff;
-    font-size: 1.2em;
-}
-
-#node-info {
-    color: #ccc;
-    line-height: 1.6;
-    font-size: 0.9em;
-}
-
-#node-info strong {
-    color: #fff;
-}
-
-.property {
-    margin: 8px 0;
-    padding: 8px;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 6px;
-    font-size: 0.85em;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-#controls {
-    position: absolute;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(20, 20, 30, 0.95);
-    backdrop-filter: blur(10px);
-    padding: 15px;
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-    z-index: 100;
-    display: flex;
-    gap: 10px;
-}
-
-.control-btn {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border: none;
-    padding: 12px 20px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 0.9em;
-    transition: all 0.3s;
-    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-}
-
-.control-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
-}
-
-.control-btn:active {
-    transform: translateY(0);
-}
-
-#stats {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    background: rgba(20, 20, 30, 0.95);
-    backdrop-filter: blur(10px);
-    padding: 15px;
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-    font-size: 0.9em;
-    color: #ccc;
-}
-
-#stats div {
-    margin: 5px 0;
-}
-
-#stats strong {
-    color: #fff;
-}
-
-#mode-indicator {
-    margin-top: 10px;
-    padding-top: 10px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    color: #667eea;
-    font-weight: bold;
-}
-
-.legend {
-    position: absolute;
-    bottom: 20px;
-    right: 20px;
-    background: rgba(20, 20, 30, 0.95);
-    backdrop-filter: blur(10px);
-    padding: 15px;
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-}
-
-.legend h3 {
-    color: #fff;
-    font-size: 0.95em;
-    margin-bottom: 10px;
-    font-weight: 600;
-}
-
-.legend-item {
-    display: flex;
-    align-items: center;
-    margin: 8px 0;
-    font-size: 0.9em;
-    color: #ccc;
-}
-
-.legend-color {
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    margin-right: 10px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-}
-
-#ar-instructions {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(20, 20, 30, 0.95);
-    backdrop-filter: blur(10px);
-    padding: 30px;
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-    text-align: center;
-    z-index: 99;
-    pointer-events: none;
-}
-
-#ar-instructions p {
-    color: #fff;
-    font-size: 1.2em;
-    margin: 10px 0;
-}
-
-/* Mobile Responsive - Completely redesigned */
-@media (max-width: 768px) {
-    #mode-selector {
-        min-width: auto;
-        width: 90%;
-        max-width: 400px;
-        padding: 25px 20px;
-    }
-
-    #mode-selector h1 {
-        font-size: 1.4em;
-    }
-
-    #mode-selector p {
-        font-size: 0.95em;
-        margin-bottom: 20px;
-    }
-
-    .mode-btn {
-        font-size: 1em;
-        padding: 15px;
-    }
-
-    /* Compact info panel for mobile */
-    #info-panel {
-        top: 10px;
-        left: 10px;
-        right: auto;
-        max-width: calc(100vw - 20px);
-        max-height: 40vh;
-        padding: 12px;
-        font-size: 0.8em;
-    }
-
-    #info-panel h2 {
-        font-size: 1em;
-        margin-bottom: 10px;
-    }
-
-    .property {
-        padding: 6px;
-        margin: 6px 0;
-        font-size: 0.75em;
-    }
-
-    /* Move stats to prevent overlap */
-    #stats {
-        top: auto;
-        bottom: 80px;
-        right: 10px;
-        left: auto;
-        font-size: 0.75em;
-        padding: 10px;
-        max-width: 150px;
-    }
-
-    #stats div {
-        margin: 3px 0;
-        white-space: nowrap;
-    }
-
-    /* Simplified controls for mobile */
-    #controls {
-        bottom: 10px;
-        left: 10px;
-        right: 10px;
-        transform: none;
-        padding: 8px;
-        gap: 6px;
-        flex-wrap: wrap;
-        justify-content: space-between;
-    }
-
-    .control-btn {
-        padding: 10px 12px;
-        font-size: 0.75em;
-        flex: 1 1 calc(50% - 3px);
-        min-width: 70px;
-    }
-
-    /* Hide legend on mobile to save space */
-    .legend {
-        display: none !important;
-    }
-
-    /* Compact AR instructions */
-    #ar-instructions {
-        padding: 20px;
-        max-width: 90%;
-    }
-
-    #ar-instructions p {
-        font-size: 1em;
-        margin: 8px 0;
+async function checkARSupport() {
+    if ('xr' in navigator) {
+        const supported = await navigator.xr.isSessionSupported('immersive-ar');
+        const msg = document.getElementById('ar-support-msg');
+        if (supported) {
+            msg.innerHTML = '✅ AR is supported on this device';
+            msg.style.color = '#4ecdc4';
+        } else {
+            msg.innerHTML = '⚠️ AR not supported. Use 3D Mode instead.';
+            msg.style.color = '#ff6b6b';
+        }
+    } else {
+        document.getElementById('ar-support-msg').innerHTML = '⚠️ WebXR not available. Use 3D Mode.';
     }
 }
 
-/* Extra small phones */
-@media (max-width: 400px) {
-    #info-panel {
-        max-height: 35vh;
-        font-size: 0.75em;
-    }
-
-    #stats {
-        font-size: 0.7em;
-        padding: 8px;
-    }
-
-    .control-btn {
-        font-size: 0.7em;
-        padding: 8px 10px;
-    }
-
-    #mode-selector h1 {
-        font-size: 1.2em;
-    }
-}
-
-/* Landscape orientation on mobile */
-@media (max-width: 768px) and (orientation: landscape) {
-    #info-panel {
-        max-height: 60vh;
-        max-width: 250px;
-    }
-
-    #stats {
-        bottom: auto;
-        top: 10px;
-    }
-
-    #controls {
-        flex-wrap: nowrap;
-        bottom: 10px;
-    }
-
-    .control-btn {
-        flex: 1;
-        padding: 8px;
-        font-size: 0.7em;
+async function loadGraphData() {
+    try {
+        const response = await fetch('./Data/knowledge-graph.json');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        graphData = await response.json();
+        document.getElementById('loading-screen').style.display = 'none';
+    } catch (error) {
+        console.error('Error loading graph data:', error);
+        document.getElementById('loading-screen').innerHTML = `
+            <div style="color: white; text-align: center;">
+                <h2>❌ Error Loading Data</h2>
+                <p>${error.message}</p>
+                <button onclick="location.reload()" style="
+                    margin-top: 20px;
+                    padding: 10px 20px;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 1em;
+                ">Retry</button>
+            </div>
+        `;
     }
 }
 
-/* Scrollbar styling */
-#info-panel::-webkit-scrollbar {
-    width: 6px;
+window.startARMode = async function() {
+    if (!graphData) {
+        alert('Data not loaded yet. Please wait...');
+        return;
+    }
+    
+    currentMode = 'ar';
+    document.getElementById('mode-selector').style.display = 'none';
+    document.getElementById('ar-instructions').style.display = 'block';
+    
+    initARScene();
+    showUI();
+};
+
+window.start3DMode = function() {
+    if (!graphData) {
+        alert('Data not loaded yet. Please wait...');
+        return;
+    }
+    
+    currentMode = '3d';
+    document.getElementById('mode-selector').style.display = 'none';
+    
+    init3DScene();
+    showUI();
+};
+
+function initARScene() {
+    // Create scene
+    scene = new THREE.Scene();
+
+    // Create camera
+    camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+
+    // Create renderer with AR support
+    renderer = new THREE.WebGLRenderer({ 
+        antialias: true, 
+        alpha: true 
+    });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.xr.enabled = true;
+    document.getElementById('container').appendChild(renderer.domElement);
+
+    // Add AR button
+    const arButton = ARButton.createButton(renderer, {
+        requiredFeatures: ['hit-test'],
+        optionalFeatures: ['dom-overlay'],
+        domOverlay: { root: document.body }
+    });
+    document.body.appendChild(arButton);
+
+    // Lighting for AR
+    const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+    light.position.set(0.5, 1, 0.25);
+    scene.add(light);
+
+    // Create reticle (placement indicator)
+    const geometry = new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2);
+    const material = new THREE.MeshBasicMaterial({ color: 0x667eea });
+    reticle = new THREE.Mesh(geometry, material);
+    reticle.matrixAutoUpdate = false;
+    reticle.visible = false;
+    scene.add(reticle);
+
+    // Create graph group
+    graphGroup = new THREE.Group();
+    graphGroup.visible = false;
+    scene.add(graphGroup);
+
+    // Setup graph
+    createGraph();
+
+    // Setup AR controls
+    setupARControls();
+
+    // Start animation
+    renderer.setAnimationLoop(renderAR);
+
+    document.getElementById('mode-indicator').textContent = '📱 AR Mode';
 }
 
-#info-panel::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 10px;
+function init3DScene() {
+    // Create scene
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0a0a0a);
+
+    // Create camera
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.z = 30;
+
+    // Create renderer
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    
+    // Make canvas touch-friendly
+    const canvas = renderer.domElement;
+    canvas.style.touchAction = 'none';
+    canvas.style.display = 'block';
+    
+    document.getElementById('container').appendChild(canvas);
+
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+
+    const pointLight = new THREE.PointLight(0xffffff, 0.8);
+    pointLight.position.set(20, 20, 20);
+    scene.add(pointLight);
+
+    const pointLight2 = new THREE.PointLight(0xffffff, 0.4);
+    pointLight2.position.set(-20, -20, -20);
+    scene.add(pointLight2);
+
+    // Create graph group
+    graphGroup = new THREE.Group();
+    scene.add(graphGroup);
+
+    // Setup graph
+    createGraph();
+
+    // Setup controls
+    raycaster = new THREE.Raycaster();
+    mouse = new THREE.Vector2();
+    setup3DControls();
+
+    // Start animation
+    animate3D();
+
+    document.getElementById('mode-indicator').textContent = '🖥️ 3D Mode';
 }
 
-#info-panel::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 10px;
-}
+function createGraph() {
+    const entities = graphData.entities || [];
+    const relationships = graphData.relationships || [];
 
-#info-panel::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.3);
-}
+    // Clear existing
+    nodes = [];
+    edges = [];
+    while (graphGroup.children.length > 0) {
+        graphGroup.remove(graphGroup.children[0]);
+    }
 
-/* Smooth transitions */
-#info-panel,
-#controls,
-#stats,
-.legend {
-    transition: opacity 0.3s ease;
-}
+    const nodeMap = new Map();
+    const radius = currentMode === 'ar' ? 0.15 : 15;
 
-/* AR Button styling */
-#ARButton {
-    position: absolute !important;
-    bottom: 80px !important;
-    left: 50% !important;
-    transform: translateX(-50%) !important;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-    color: white !important;
-    border: none !important;
-    padding: 15px 30px !important;
-    border-radius: 12px !important;
-    font-size: 1.1em !important;
-    cursor: pointer !important;
-    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4) !important;
-    z-index: 999 !important;
-}
+    // Create nodes with physics-like distribution
+    entities.forEach((entity, index) => {
+        const angle = (index / entities.length) * Math.PI * 2;
+        const tier = Math.floor(index / 6);
+        const r = radius * (1 + tier * 0.3);
+        
+        const x = Math.cos(angle) * r;
+        const y = (Math.random() - 0.5) * radius * 0.5;
+        const z = Math.sin(angle) * r;
 
-#ARButton:hover {
-    transform: translateX(-50%) translateY(-2px) !important;
-    box-shadow: 0 12px 35px rgba(102, 126, 234, 0.6) !important;
-}
+        const color = nodeColors[entity.type] || nodeColors.default;
+        const size = entity.type === 'Document' ? 
+            (currentMode === 'ar' ? 0.03 : 1.5) : 
+            (currentMode === 'ar' ? 0.015 : 0.8);
+        
+        const geometry = new THREE.SphereGeometry(size, 16, 16);
+        const material = new THREE.MeshPhongMaterial({ 
+            color: color,
+            emissive: color,
+            emissiveIntensity: 0.3,
+            shininess: 100
+        });
+        const sphere = new THREE.Mesh(geometry, material);
+        
+        sphere.position.set(x, y, z);
+        sphere.userData = entity;
+        graphGroup.add(sphere);
+        nodes.push(sphere);
+        nodeMap.set(entity.id, sphere);
+    });
 
-@media (max-width: 768px) {
-    #ARButton {
-        bottom: 70px !important;
-        padding: 12px 24px !important;
-        font-size: 0.95em !important;
+    // Create links
+    let links = [];
+    if (relationships && relationships.length > 0) {
+        links = relationships;
+    } else {
+        // Auto-create links
+        entities.forEach(entity => {
+            if (entity.properties && entity.properties.document_id) {
+                links.push({
+                    source: entity.properties.document_id,
+                    target: entity.id
+                });
+            }
+        });
+    }
+
+    links.forEach(rel => {
+        const sourceNode = nodeMap.get(rel.source);
+        const targetNode = nodeMap.get(rel.target);
+        
+        if (sourceNode && targetNode) {
+            const points = [sourceNode.position, targetNode.position];
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const material = new THREE.LineBasicMaterial({ 
+                color: 0x888888,
+                transparent: true,
+                opacity: 0.3
+            });
+            const line = new THREE.Line(geometry, material);
+            graphGroup.add(line);
+            edges.push(line);
+        }
+    });
+
+    // Update stats
+    document.getElementById('node-count').textContent = entities.length;
+    document.getElementById('link-count').textContent = links.length;
+
+    // Scale graph for AR
+    if (currentMode === 'ar') {
+        graphGroup.scale.set(1, 1, 1);
     }
 }
+
+function setupARControls() {
+    const controller = renderer.xr.getController(0);
+    controller.addEventListener('select', onARSelect);
+    scene.add(controller);
+}
+
+function onARSelect() {
+    if (reticle.visible && !graphGroup.visible) {
+        // Place the graph
+        graphGroup.position.setFromMatrixPosition(reticle.matrix);
+        graphGroup.visible = true;
+        document.getElementById('ar-instructions').style.display = 'none';
+    }
+}
+
+function setup3DControls() {
+    let isDragging = false;
+    let previousMousePosition = { x: 0, y: 0 };
+    let touchStartTime = 0;
+    let lastTouchX = 0;
+    let lastTouchY = 0;
+    
+    // Clear any existing event listeners first
+    const canvas = renderer.domElement;
+    canvas.style.touchAction = 'none'; // Disable browser touch actions
+    
+    // MOUSE CONTROLS (for desktop)
+    canvas.addEventListener('mousedown', onMouseDown);
+    canvas.addEventListener('mousemove', onMouseMove);
+    canvas.addEventListener('mouseup', onMouseUp);
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    
+    // TOUCH CONTROLS - SIMPLIFIED AND FIXED
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+    canvas.addEventListener('touchend', onTouchEnd, { passive: false });
+    canvas.addEventListener('touchcancel', onTouchEnd, { passive: false });
+    
+    // Prevent context menu on long press
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    
+    function onMouseDown(e) {
+        isDragging = true;
+        previousMousePosition = { x: e.clientX, y: e.clientY };
+        e.preventDefault();
+    }
+    
+    function onMouseMove(e) {
+        if (!isDragging) return;
+        
+        const deltaX = e.clientX - previousMousePosition.x;
+        const deltaY = e.clientY - previousMousePosition.y;
+        
+        graphGroup.rotation.y += deltaX * 0.01;
+        graphGroup.rotation.x += deltaY * 0.01;
+        
+        previousMousePosition = { x: e.clientX, y: e.clientY };
+        e.preventDefault();
+    }
+    
+    function onMouseUp(e) {
+        if (!isDragging) {
+            // Handle click
+            onNodeClick(e);
+        }
+        isDragging = false;
+        e.preventDefault();
+    }
+    
+    function onWheel(e) {
+        e.preventDefault();
+        camera.position.z += e.deltaY * 0.01;
+        camera.position.z = Math.max(5, Math.min(100, camera.position.z));
+    }
+    
+    // TOUCH HANDLERS
+    function onTouchStart(e) {
+        e.preventDefault();
+        
+        if (e.touches.length === 1) {
+            // Single touch - start rotation or tap
+            const touch = e.touches[0];
+            lastTouchX = touch.clientX;
+            lastTouchY = touch.clientY;
+            touchStartTime = Date.now();
+        } else if (e.touches.length === 2) {
+            // Two touches - start pinch zoom
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            touchStartDistance = Math.sqrt(dx * dx + dy * dy);
+        }
+    }
+    
+    function onTouchMove(e) {
+        e.preventDefault();
+        
+        if (e.touches.length === 1) {
+            // Single finger rotation
+            const touch = e.touches[0];
+            const deltaX = touch.clientX - lastTouchX;
+            const deltaY = touch.clientY - lastTouchY;
+            
+            graphGroup.rotation.y += deltaX * 0.01;
+            graphGroup.rotation.x += deltaY * 0.01;
+            
+            lastTouchX = touch.clientX;
+            lastTouchY = touch.clientY;
+        } else if (e.touches.length === 2) {
+            // Pinch zoom
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (touchStartDistance) {
+                const delta = distance - touchStartDistance;
+                camera.position.z -= delta * 0.02;
+                camera.position.z = Math.max(5, Math.min(100, camera.position.z));
+            }
+            touchStartDistance = distance;
+        }
+    }
+    
+    function onTouchEnd(e) {
+        e.preventDefault();
+        
+        // Check if this was a tap (not a drag)
+        if (e.touches.length === 0 && e.changedTouches.length === 1) {
+            const touchDuration = Date.now() - touchStartTime;
+            
+            // Only trigger node selection if it was a short tap (< 300ms)
+            if (touchDuration < 300) {
+                const touch = e.changedTouches[0];
+                
+                // Convert touch to normalized device coordinates
+                mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
+                
+                // Raycast for node selection
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(nodes);
+                
+                if (intersects.length > 0) {
+                    // Handle node selection
+                    selectNode(intersects[0].object);
+                } else {
+                    // Deselect if tapping empty space
+                    if (selectedNode) {
+                        deselectNode();
+                    }
+                }
+            }
+        }
+        
+        touchStartDistance = 0;
+    }
+}
+
+function selectNode(node) {
+    // Deselect previous node
+    if (selectedNode) {
+        deselectNode();
+    }
+    
+    // Select new node
+    selectedNode = node;
+    selectedNode.material.emissiveIntensity = 0.6;
+    selectedNode.scale.set(1.3, 1.3, 1.3);
+    displayNodeInfo(selectedNode.userData);
+    
+    // Show info panel
+    document.getElementById('info-panel').style.display = 'block';
+    
+    // Haptic feedback on mobile
+    if (navigator.vibrate) {
+        navigator.vibrate(30);
+    }
+}
+
+function deselectNode() {
+    if (selectedNode) {
+        selectedNode.material.emissiveIntensity = 0.3;
+        selectedNode.scale.set(1, 1, 1);
+        selectedNode = null;
+        document.getElementById('node-info').innerHTML = 'Tap on a node to see details';
+    }
+}
+
+function onNodeClick(event) {
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(nodes);
+
+    if (intersects.length > 0) {
+        selectNode(intersects[0].object);
+    } else {
+        if (selectedNode) {
+            deselectNode();
+        }
+    }
+}
+
+function displayNodeInfo(data) {
+    let html = `
+        <div class="property">
+            <strong>Type:</strong> ${data.type || 'N/A'}
+        </div>
+        <div class="property">
+            <strong>Label:</strong> ${data.label || 'N/A'}
+        </div>
+    `;
+
+    if (data.source_doc) {
+        html += `<div class="property"><strong>Source:</strong> ${data.source_doc}</div>`;
+    }
+
+    if (data.properties) {
+        html += '<div style="margin: 10px 0 5px 0; color: #667eea;"><strong>Properties:</strong></div>';
+        let propCount = 0;
+        for (const [key, value] of Object.entries(data.properties)) {
+            if (propCount++ > 3) break; // Limit properties on mobile
+            const displayValue = Array.isArray(value) ? value.join(', ') : 
+                                (typeof value === 'string' && value.length > 50) ? 
+                                value.substring(0, 50) + '...' : value;
+            html += `<div class="property"><strong>${key}:</strong> ${displayValue}</div>`;
+        }
+    }
+
+    document.getElementById('node-info').innerHTML = html;
+}
+
+function renderAR(timestamp, frame) {
+    if (frame) {
+        const referenceSpace = renderer.xr.getReferenceSpace();
+        const session = renderer.xr.getSession();
+
+        if (hitTestSourceRequested === false) {
+            session.requestReferenceSpace('viewer').then((referenceSpace) => {
+                session.requestHitTestSource({ space: referenceSpace }).then((source) => {
+                    hitTestSource = source;
+                });
+            });
+
+            session.addEventListener('end', () => {
+                hitTestSourceRequested = false;
+                hitTestSource = null;
+            });
+
+            hitTestSourceRequested = true;
+        }
+
+        if (hitTestSource) {
+            const hitTestResults = frame.getHitTestResults(hitTestSource);
+
+            if (hitTestResults.length && !graphGroup.visible) {
+                const hit = hitTestResults[0];
+                reticle.visible = true;
+                reticle.matrix.fromArray(hit.getPose(referenceSpace).transform.matrix);
+            } else {
+                reticle.visible = false;
+            }
+        }
+
+        // Rotate graph slowly
+        if (graphGroup.visible) {
+            graphGroup.rotation.y += 0.002;
+        }
+    }
+
+    renderer.render(scene, camera);
+}
+
+function animate3D() {
+    requestAnimationFrame(animate3D);
+
+    // Gentle rotation
+    nodes.forEach(node => {
+        node.rotation.x += 0.001;
+        node.rotation.y += 0.001;
+    });
+
+    renderer.render(scene, camera);
+}
+
+function showUI() {
+    document.getElementById('info-panel').style.display = 'block';
+    document.getElementById('stats').style.display = 'block';
+    document.getElementById('controls').style.display = 'flex';
+    if (currentMode === '3d' && window.innerWidth > 768) {
+        document.querySelector('.legend').style.display = 'block';
+    }
+}
+
+window.resetView = function() {
+    if (currentMode === '3d') {
+        camera.position.set(0, 0, 30);
+        graphGroup.rotation.set(0, 0, 0);
+    }
+    
+    deselectNode();
+};
+
+window.zoomIn = function() {
+    if (currentMode === '3d') {
+        camera.position.z = Math.max(5, camera.position.z - 3);
+    } else if (currentMode === 'ar') {
+        graphGroup.scale.multiplyScalar(1.2);
+    }
+};
+
+window.zoomOut = function() {
+    if (currentMode === '3d') {
+        camera.position.z = Math.min(100, camera.position.z + 3);
+    } else if (currentMode === 'ar') {
+        graphGroup.scale.multiplyScalar(0.8);
+    }
+};
+
+window.exitMode = function() {
+    location.reload();
+};
+
+window.addEventListener('resize', () => {
+    if (camera && renderer) {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+});
+
+// Debug helper for mobile testing
+window.enableTouchDebug = function() {
+    const canvas = document.querySelector('canvas');
+    if (!canvas) return;
+    
+    canvas.addEventListener('touchstart', (e) => {
+        console.log('Touch start:', e.touches.length, 'fingers at', 
+                   e.touches[0]?.clientX, e.touches[0]?.clientY);
+    }, { passive: true });
+    
+    canvas.addEventListener('touchmove', (e) => {
+        console.log('Touch move:', e.touches.length, 'fingers');
+    }, { passive: true });
+    
+    console.log('Touch debug enabled');
+};
