@@ -15,7 +15,7 @@ window.addEventListener('load', () => {
 
 async function loadGraphData() {
     try {
-        const response = await fetch('/api/graph-data');
+        const response = await fetch('./Data/knowledge-graph.json');
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
