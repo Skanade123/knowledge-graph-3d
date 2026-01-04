@@ -9,6 +9,7 @@ body {
     overflow: hidden;
     background: #0a0a0a;
     touch-action: none;
+    -webkit-tap-highlight-color: transparent;
 }
 
 #container {
@@ -94,6 +95,7 @@ body {
     font-size: 1.3em;
     transition: all 0.3s;
     box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+    -webkit-tap-highlight-color: transparent;
 }
 
 .mode-btn:hover {
@@ -122,31 +124,34 @@ body {
 }
 
 #info-panel {
-    position: absolute;
-    top: 20px;
-    left: 20px;
-    background: rgba(20, 20, 30, 0.95);
-    backdrop-filter: blur(10px);
+    position: fixed;
+    top: 15px;
+    left: 15px;
+    background: rgba(20, 20, 30, 0.98);
+    backdrop-filter: blur(15px);
     padding: 20px;
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    max-width: 350px;
-    max-height: 60vh;
+    padding-top: 45px;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    max-width: 380px;
+    max-height: 65vh;
     overflow-y: auto;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-    z-index: 100;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+    z-index: 200;
+    transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
 #info-panel h2 {
     margin: 0 0 15px 0;
     color: #fff;
-    font-size: 1.2em;
+    font-size: 1.3em;
+    font-weight: 600;
 }
 
 #node-info {
     color: #ccc;
-    line-height: 1.6;
-    font-size: 0.9em;
+    line-height: 1.7;
+    font-size: 0.95em;
 }
 
 #node-info strong {
@@ -154,26 +159,31 @@ body {
 }
 
 .property {
-    margin: 8px 0;
-    padding: 8px;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 6px;
-    font-size: 0.85em;
+    margin: 10px 0;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    font-size: 0.9em;
     border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: background 0.2s ease;
+}
+
+.property:hover {
+    background: rgba(255, 255, 255, 0.08);
 }
 
 #controls {
-    position: absolute;
+    position: fixed;
     bottom: 20px;
     left: 50%;
     transform: translateX(-50%);
     background: rgba(20, 20, 30, 0.95);
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(15px);
     padding: 15px;
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-    z-index: 100;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    z-index: 150;
     display: flex;
     gap: 10px;
 }
@@ -183,38 +193,37 @@ body {
     color: white;
     border: none;
     padding: 12px 20px;
-    border-radius: 8px;
+    border-radius: 10px;
     cursor: pointer;
-    font-size: 0.9em;
-    transition: all 0.3s;
+    font-size: 0.95em;
+    font-weight: 500;
+    transition: all 0.2s;
     box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-}
-
-.control-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+    -webkit-tap-highlight-color: transparent;
 }
 
 .control-btn:active {
-    transform: translateY(0);
+    transform: scale(0.95);
+    box-shadow: 0 2px 10px rgba(102, 126, 234, 0.4);
 }
 
 #stats {
-    position: absolute;
+    position: fixed;
     top: 20px;
     right: 20px;
     background: rgba(20, 20, 30, 0.95);
-    backdrop-filter: blur(10px);
-    padding: 15px;
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    backdrop-filter: blur(15px);
+    padding: 15px 18px;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
     font-size: 0.9em;
     color: #ccc;
+    z-index: 150;
 }
 
 #stats div {
-    margin: 5px 0;
+    margin: 6px 0;
 }
 
 #stats strong {
@@ -224,57 +233,58 @@ body {
 #mode-indicator {
     margin-top: 10px;
     padding-top: 10px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
     color: #667eea;
     font-weight: bold;
 }
 
 .legend {
-    position: absolute;
+    position: fixed;
     bottom: 20px;
     right: 20px;
     background: rgba(20, 20, 30, 0.95);
-    backdrop-filter: blur(10px);
-    padding: 15px;
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    backdrop-filter: blur(15px);
+    padding: 18px;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    z-index: 150;
 }
 
 .legend h3 {
     color: #fff;
-    font-size: 0.95em;
-    margin-bottom: 10px;
+    font-size: 1em;
+    margin-bottom: 12px;
     font-weight: 600;
 }
 
 .legend-item {
     display: flex;
     align-items: center;
-    margin: 8px 0;
-    font-size: 0.9em;
+    margin: 10px 0;
+    font-size: 0.95em;
     color: #ccc;
 }
 
 .legend-color {
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
-    margin-right: 10px;
+    margin-right: 12px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
 
 #ar-instructions {
-    position: absolute;
+    position: fixed;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background: rgba(20, 20, 30, 0.95);
-    backdrop-filter: blur(10px);
+    background: rgba(20, 20, 30, 0.98);
+    backdrop-filter: blur(15px);
     padding: 30px;
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.6);
     text-align: center;
     z-index: 99;
     pointer-events: none;
@@ -286,146 +296,178 @@ body {
     margin: 10px 0;
 }
 
-/* Mobile Responsive - Completely redesigned */
+/* MOBILE OPTIMIZATIONS - Pixel 7 specific (412x915) */
 @media (max-width: 768px) {
     #mode-selector {
         min-width: auto;
-        width: 90%;
-        max-width: 400px;
-        padding: 25px 20px;
+        width: 92%;
+        max-width: 420px;
+        padding: 30px 24px;
     }
 
     #mode-selector h1 {
-        font-size: 1.4em;
+        font-size: 1.6em;
+        margin-bottom: 8px;
     }
 
     #mode-selector p {
-        font-size: 0.95em;
-        margin-bottom: 20px;
+        font-size: 1em;
+        margin-bottom: 24px;
     }
 
     .mode-btn {
-        font-size: 1em;
-        padding: 15px;
+        font-size: 1.05em;
+        padding: 16px;
+        margin: 12px 0;
     }
 
-    /* Compact info panel for mobile */
+    /* Info panel - optimized for touch */
     #info-panel {
         top: 10px;
         left: 10px;
-        right: auto;
+        right: 10px;
         max-width: calc(100vw - 20px);
-        max-height: 40vh;
-        padding: 12px;
-        font-size: 0.8em;
+        max-height: 50vh;
+        padding: 18px;
+        padding-top: 50px;
+        font-size: 0.9em;
+        border-radius: 14px;
     }
 
     #info-panel h2 {
-        font-size: 1em;
-        margin-bottom: 10px;
+        font-size: 1.1em;
+        margin-bottom: 12px;
     }
 
     .property {
-        padding: 6px;
-        margin: 6px 0;
-        font-size: 0.75em;
+        padding: 10px;
+        margin: 8px 0;
+        font-size: 0.85em;
+        border-radius: 6px;
     }
 
-    /* Move stats to prevent overlap */
+    /* Stats - moved to avoid overlap */
     #stats {
         top: auto;
-        bottom: 80px;
+        bottom: 90px;
         right: 10px;
-        left: auto;
-        font-size: 0.75em;
-        padding: 10px;
-        max-width: 150px;
+        font-size: 0.8em;
+        padding: 12px 14px;
+        max-width: 140px;
+        border-radius: 12px;
     }
 
     #stats div {
-        margin: 3px 0;
-        white-space: nowrap;
+        margin: 4px 0;
+        font-size: 0.9em;
     }
 
-    /* Simplified controls for mobile */
+    /* Controls - better mobile layout */
     #controls {
-        bottom: 10px;
+        bottom: 15px;
         left: 10px;
         right: 10px;
         transform: none;
-        padding: 8px;
-        gap: 6px;
+        padding: 12px;
+        gap: 8px;
         flex-wrap: wrap;
         justify-content: space-between;
+        border-radius: 14px;
     }
 
     .control-btn {
-        padding: 10px 12px;
-        font-size: 0.75em;
-        flex: 1 1 calc(50% - 3px);
-        min-width: 70px;
+        padding: 12px 16px;
+        font-size: 0.85em;
+        flex: 1 1 calc(50% - 4px);
+        min-width: 80px;
+        border-radius: 8px;
     }
 
-    /* Hide legend on mobile to save space */
+    /* Hide legend on mobile */
     .legend {
         display: none !important;
     }
 
     /* Compact AR instructions */
     #ar-instructions {
-        padding: 20px;
+        padding: 24px 20px;
         max-width: 90%;
+        border-radius: 12px;
     }
 
     #ar-instructions p {
-        font-size: 1em;
+        font-size: 1.05em;
         margin: 8px 0;
+    }
+
+    /* Scrollbar for mobile */
+    #info-panel::-webkit-scrollbar {
+        width: 4px;
     }
 }
 
-/* Extra small phones */
-@media (max-width: 400px) {
+/* Pixel 7 specific optimizations */
+@media (max-width: 414px) {
     #info-panel {
-        max-height: 35vh;
-        font-size: 0.75em;
+        max-height: 45vh;
+        font-size: 0.85em;
     }
 
     #stats {
-        font-size: 0.7em;
-        padding: 8px;
+        font-size: 0.75em;
+        padding: 10px 12px;
+        bottom: 85px;
     }
 
     .control-btn {
-        font-size: 0.7em;
-        padding: 8px 10px;
+        font-size: 0.8em;
+        padding: 11px 14px;
     }
 
-    #mode-selector h1 {
-        font-size: 1.2em;
+    .property {
+        font-size: 0.8em;
+        padding: 8px;
     }
 }
 
-/* Landscape orientation on mobile */
-@media (max-width: 768px) and (orientation: landscape) {
+/* Landscape mode on mobile */
+@media (max-width: 915px) and (orientation: landscape) {
     #info-panel {
-        max-height: 60vh;
-        max-width: 250px;
+        max-height: 70vh;
+        max-width: 320px;
+        left: 10px;
+        right: auto;
     }
 
     #stats {
-        bottom: auto;
         top: 10px;
+        bottom: auto;
+        right: 10px;
     }
 
     #controls {
-        flex-wrap: nowrap;
         bottom: 10px;
+        left: 50%;
+        right: auto;
+        transform: translateX(-50%);
+        max-width: 500px;
+        flex-wrap: nowrap;
     }
 
     .control-btn {
         flex: 1;
-        padding: 8px;
-        font-size: 0.7em;
+        font-size: 0.8em;
+        padding: 10px 12px;
+    }
+}
+
+/* High DPI displays (Pixel 7 has 2.625x DPR) */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+    #info-panel,
+    #stats,
+    #controls,
+    .legend {
+        border-width: 0.5px;
     }
 }
 
@@ -440,12 +482,12 @@ body {
 }
 
 #info-panel::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(102, 126, 234, 0.4);
     border-radius: 10px;
 }
 
 #info-panel::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.3);
+    background: rgba(102, 126, 234, 0.6);
 }
 
 /* Smooth transitions */
@@ -453,35 +495,68 @@ body {
 #controls,
 #stats,
 .legend {
-    transition: opacity 0.3s ease;
+    transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
 /* AR Button styling */
 #ARButton {
-    position: absolute !important;
-    bottom: 80px !important;
+    position: fixed !important;
+    bottom: 90px !important;
     left: 50% !important;
     transform: translateX(-50%) !important;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
     color: white !important;
     border: none !important;
-    padding: 15px 30px !important;
-    border-radius: 12px !important;
+    padding: 16px 32px !important;
+    border-radius: 14px !important;
     font-size: 1.1em !important;
+    font-weight: 500 !important;
     cursor: pointer !important;
-    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4) !important;
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5) !important;
     z-index: 999 !important;
+    -webkit-tap-highlight-color: transparent !important;
 }
 
-#ARButton:hover {
-    transform: translateX(-50%) translateY(-2px) !important;
-    box-shadow: 0 12px 35px rgba(102, 126, 234, 0.6) !important;
+#ARButton:active {
+    transform: translateX(-50%) scale(0.95) !important;
 }
 
 @media (max-width: 768px) {
     #ARButton {
-        bottom: 70px !important;
-        padding: 12px 24px !important;
-        font-size: 0.95em !important;
+        bottom: 80px !important;
+        padding: 14px 28px !important;
+        font-size: 1em !important;
+        border-radius: 12px !important;
+    }
+}
+
+/* Touch feedback animations */
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.control-btn:active,
+.mode-btn:active {
+    animation: pulse 0.3s ease;
+}
+
+/* Safe area for notches and rounded corners */
+@supports (padding: max(0px)) {
+    #info-panel {
+        top: max(15px, env(safe-area-inset-top));
+        left: max(15px, env(safe-area-inset-left));
+    }
+
+    #stats {
+        top: max(20px, env(safe-area-inset-top));
+        right: max(20px, env(safe-area-inset-right));
+    }
+
+    #controls {
+        bottom: max(20px, env(safe-area-inset-bottom));
+        left: max(10px, env(safe-area-inset-left));
+        right: max(10px, env(safe-area-inset-right));
     }
 }
