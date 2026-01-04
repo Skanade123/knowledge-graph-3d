@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AR Knowledge Graph Viewer</title>
+    <link rel="stylesheet" href="css/ar-style.css">
+</head>
+<body>
+    <div id="loading-screen">
+        <div class="loader"></div>
+        <p>Loading AR Knowledge Graph...</p>
+    </div>
+
+    <div id="mode-selector">
+        <h1>📊 3D Knowledge Graph</h1>
+        <p>Choose your viewing mode:</p>
+        <button class="mode-btn" onclick="startARMode()">
+            📱 AR Mode
+            <span class="mode-desc">View in Augmented Reality</span>
+        </button>
+        <button class="mode-btn" onclick="start3DMode()">
+            🖥️ 3D Mode
+            <span class="mode-desc">View in browser (all devices)</span>
+        </button>
+        <div id="ar-support-msg"></div>
+    </div>
+
+    <div id="container"></div>
+
+    <div id="info-panel" style="display: none;">
+        <h2>Node Information</h2>
+        <div id="node-info">Click on a node to see details</div>
+    </div>
+
+    <div id="stats" style="display: none;">
+        <div><strong>Nodes:</strong> <span id="node-count">0</span></div>
+        <div><strong>Links:</strong> <span id="link-count">0</span></div>
+        <div id="mode-indicator"></div>
+    </div>
+
+    <div id="controls" style="display: none;">
+        <button class="control-btn" onclick="resetView()">🎯 Reset</button>
+        <button class="control-btn" onclick="zoomIn()">🔍 Zoom In</button>
+        <button class="control-btn" onclick="zoomOut()">🔎 Zoom Out</button>
+        <button class="control-btn" onclick="exitMode()">🚪 Exit</button>
+    </div>
+
+    <div class="legend" style="display: none;">
+        <h3>Node Types</h3>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #ff6b6b;"></div>
+            <span>Document</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #4ecdc4;"></div>
+            <span>Chunk</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #45b7d1;"></div>
+            <span>Other</span>
+        </div>
+    </div>
+
+    <div id="ar-instructions" style="display: none;">
+        <p>👆 Point your camera at a flat surface</p>
+        <p>Tap to place the graph</p>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script type="module" src="js/ar-graph.js"></script>
+</body>
+</html>
