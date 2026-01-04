@@ -8,6 +8,7 @@ body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     overflow: hidden;
     background: #0a0a0a;
+    touch-action: none;
 }
 
 #container {
@@ -276,6 +277,7 @@ body {
     box-shadow: 0 8px 32px rgba(0,0,0,0.5);
     text-align: center;
     z-index: 99;
+    pointer-events: none;
 }
 
 #ar-instructions p {
@@ -284,50 +286,146 @@ body {
     margin: 10px 0;
 }
 
-/* Mobile Responsive */
+/* Mobile Responsive - Completely redesigned */
 @media (max-width: 768px) {
     #mode-selector {
         min-width: auto;
         width: 90%;
-        padding: 30px 20px;
+        max-width: 400px;
+        padding: 25px 20px;
     }
 
     #mode-selector h1 {
-        font-size: 1.5em;
+        font-size: 1.4em;
+    }
+
+    #mode-selector p {
+        font-size: 0.95em;
+        margin-bottom: 20px;
     }
 
     .mode-btn {
-        font-size: 1.1em;
+        font-size: 1em;
         padding: 15px;
     }
 
+    /* Compact info panel for mobile */
     #info-panel {
-        max-width: calc(100vw - 40px);
+        top: 10px;
+        left: 10px;
+        right: auto;
+        max-width: calc(100vw - 20px);
+        max-height: 40vh;
+        padding: 12px;
+        font-size: 0.8em;
+    }
+
+    #info-panel h2 {
+        font-size: 1em;
+        margin-bottom: 10px;
+    }
+
+    .property {
+        padding: 6px;
+        margin: 6px 0;
+        font-size: 0.75em;
+    }
+
+    /* Move stats to prevent overlap */
+    #stats {
+        top: auto;
+        bottom: 80px;
+        right: 10px;
+        left: auto;
+        font-size: 0.75em;
+        padding: 10px;
+        max-width: 150px;
+    }
+
+    #stats div {
+        margin: 3px 0;
+        white-space: nowrap;
+    }
+
+    /* Simplified controls for mobile */
+    #controls {
+        bottom: 10px;
         left: 10px;
         right: 10px;
-        padding: 15px;
-        font-size: 0.85em;
-    }
-    
-    #controls {
+        transform: none;
+        padding: 8px;
+        gap: 6px;
         flex-wrap: wrap;
-        padding: 10px;
+        justify-content: space-between;
     }
-    
+
     .control-btn {
-        padding: 10px 15px;
-        font-size: 0.85em;
-        flex: 1 1 auto;
+        padding: 10px 12px;
+        font-size: 0.75em;
+        flex: 1 1 calc(50% - 3px);
+        min-width: 70px;
     }
-    
-    #stats {
-        top: 10px;
-        right: 10px;
-        font-size: 0.85em;
-    }
-    
+
+    /* Hide legend on mobile to save space */
     .legend {
-        display: none;
+        display: none !important;
+    }
+
+    /* Compact AR instructions */
+    #ar-instructions {
+        padding: 20px;
+        max-width: 90%;
+    }
+
+    #ar-instructions p {
+        font-size: 1em;
+        margin: 8px 0;
+    }
+}
+
+/* Extra small phones */
+@media (max-width: 400px) {
+    #info-panel {
+        max-height: 35vh;
+        font-size: 0.75em;
+    }
+
+    #stats {
+        font-size: 0.7em;
+        padding: 8px;
+    }
+
+    .control-btn {
+        font-size: 0.7em;
+        padding: 8px 10px;
+    }
+
+    #mode-selector h1 {
+        font-size: 1.2em;
+    }
+}
+
+/* Landscape orientation on mobile */
+@media (max-width: 768px) and (orientation: landscape) {
+    #info-panel {
+        max-height: 60vh;
+        max-width: 250px;
+    }
+
+    #stats {
+        bottom: auto;
+        top: 10px;
+    }
+
+    #controls {
+        flex-wrap: nowrap;
+        bottom: 10px;
+    }
+
+    .control-btn {
+        flex: 1;
+        padding: 8px;
+        font-size: 0.7em;
     }
 }
 
@@ -361,7 +459,7 @@ body {
 /* AR Button styling */
 #ARButton {
     position: absolute !important;
-    bottom: 20px !important;
+    bottom: 80px !important;
     left: 50% !important;
     transform: translateX(-50%) !important;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
@@ -378,4 +476,12 @@ body {
 #ARButton:hover {
     transform: translateX(-50%) translateY(-2px) !important;
     box-shadow: 0 12px 35px rgba(102, 126, 234, 0.6) !important;
+}
+
+@media (max-width: 768px) {
+    #ARButton {
+        bottom: 70px !important;
+        padding: 12px 24px !important;
+        font-size: 0.95em !important;
+    }
 }
