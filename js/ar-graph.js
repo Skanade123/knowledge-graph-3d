@@ -11,7 +11,6 @@ let currentMode = null;
 let reticle;
 let hitTestSource = null;
 let hitTestSourceRequested = false;
-let controller = null;
 
 const nodeColors = {
     'Document': 0xff6b6b,
@@ -43,7 +42,7 @@ async function checkARSupport() {
 
 async function loadGraphData() {
     try {
-        const response = await fetch('./Data/knowledge-graph.json');
+        const response = await fetch('/api/graph-data');
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -143,15 +142,8 @@ function initARScene() {
     // Setup graph
     createGraph();
 
-    // Setup AR controls with interaction
+    // Touch controls for AR
     setupARControls();
-    
-    // Setup mobile events
-    setupMobileEvents();
-
-    // Initialize raycasting for AR
-    raycaster = new THREE.Raycaster();
-    mouse = new THREE.Vector2();
 
     // Start animation
     renderer.setAnimationLoop(renderAR);
@@ -197,30 +189,11 @@ function init3DScene() {
     raycaster = new THREE.Raycaster();
     mouse = new THREE.Vector2();
     setup3DControls();
-    
-    // Setup mobile events
-    setupMobileEvents();
 
     // Start animation
     animate3D();
 
     document.getElementById('mode-indicator').textContent = '🖥️ 3D Mode';
-}
-
-function setupMobileEvents() {
-    // Double-tap to reset view
-    let lastTap = 0;
-    renderer.domElement.addEventListener('touchend', function(e) {
-        const currentTime = new Date().getTime();
-        const tapLength = currentTime - lastTap;
-        
-        if (tapLength < 500 && tapLength > 0 && e.touches.length === 0) {
-            // Double tap detected
-            resetView();
-            if (e.cancelable) e.preventDefault();
-        }
-        lastTap = currentTime;
-    });
 }
 
 function createGraph() {
@@ -313,98 +286,9 @@ function createGraph() {
 }
 
 function setupARControls() {
-    // Create controller for interaction
-    controller = renderer.xr.getController(0);
+    const controller = renderer.xr.getController(0);
     controller.addEventListener('select', onARSelect);
-    controller.addEventListener('selectstart', onARSelectStart);
-    controller.addEventListener('selectend', onARSelectEnd);
     scene.add(controller);
-
-    // Add touch events for mobile AR
-    renderer.domElement.addEventListener('touchstart', handleTouchStart, { passive: false });
-    renderer.domElement.addEventListener('touchmove', handleTouchMove, { passive: false });
-    renderer.domElement.addEventListener('touchend', handleTouchEnd);
-}
-
-function handleTouchStart(e) {
-    // Only prevent default for multi-touch gestures
-    if (e.touches.length >= 2) {
-        e.preventDefault();
-    }
-    
-    if (currentMode === 'ar' && e.touches.length === 2) {
-        // Pinch gesture start
-        const dx = e.touches[0].clientX - e.touches[1].clientX;
-        const dy = e.touches[0].clientY - e.touches[1].clientY;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        renderer.domElement.userData.pinchStartDistance = distance;
-        renderer.domElement.userData.pinchStartScale = graphGroup.scale.x;
-    }
-    
-    if (e.touches.length === 1 && graphGroup.visible) {
-        // Single touch - check for node selection
-        const touch = e.touches[0];
-        const rect = renderer.domElement.getBoundingClientRect();
-        
-        mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
-        mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
-        
-        // Update raycaster
-        raycaster.setFromCamera(mouse, camera);
-        const intersects = raycaster.intersectObjects(nodes);
-        
-        if (intersects.length > 0) {
-            onNodeSelect(intersects[0].object);
-            if (e.cancelable) e.preventDefault();
-        }
-    }
-}
-
-function handleTouchMove(e) {
-    if (e.touches.length >= 2) {
-        e.preventDefault();
-    }
-    
-    if (currentMode === 'ar' && e.touches.length === 2 && graphGroup.visible) {
-        // Pinch to zoom
-        const dx = e.touches[0].clientX - e.touches[1].clientX;
-        const dy = e.touches[0].clientY - e.touches[1].clientY;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        
-        if (renderer.domElement.userData.pinchStartDistance) {
-            const scaleFactor = distance / renderer.domElement.userData.pinchStartDistance;
-            const newScale = renderer.domElement.userData.pinchStartScale * scaleFactor;
-            
-            // Limit scaling
-            const minScale = 0.1;
-            const maxScale = 5;
-            
-            graphGroup.scale.setScalar(Math.max(minScale, Math.min(maxScale, newScale)));
-        }
-    }
-}
-
-function handleTouchEnd(e) {
-    renderer.domElement.userData.pinchStartDistance = null;
-    renderer.domElement.userData.pinchStartScale = null;
-    
-    // Add single tap detection for node selection
-    if (e.changedTouches.length === 1 && graphGroup.visible && currentMode === 'ar') {
-        const touch = e.changedTouches[0];
-        const rect = renderer.domElement.getBoundingClientRect();
-        
-        // Calculate normalized device coordinates
-        mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
-        mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
-        
-        // Update raycaster
-        raycaster.setFromCamera(mouse, camera);
-        const intersects = raycaster.intersectObjects(nodes);
-        
-        if (intersects.length > 0) {
-            onNodeSelect(intersects[0].object);
-        }
-    }
 }
 
 function onARSelect() {
@@ -413,33 +297,13 @@ function onARSelect() {
         graphGroup.position.setFromMatrixPosition(reticle.matrix);
         graphGroup.visible = true;
         document.getElementById('ar-instructions').style.display = 'none';
-    } else if (graphGroup.visible) {
-        // Check for node selection in AR mode
-        const tempRaycaster = new THREE.Raycaster();
-        tempRaycaster.setFromXRController(0, renderer.xr.getCamera());
-        const intersects = tempRaycaster.intersectObjects(nodes);
-        
-        if (intersects.length > 0) {
-            onNodeSelect(intersects[0].object);
-        }
     }
-}
-
-function onARSelectStart() {
-    // Optional: Visual feedback when starting selection
-}
-
-function onARSelectEnd() {
-    // Optional: Visual feedback when ending selection
 }
 
 function setup3DControls() {
     let isDragging = false;
     let previousMousePosition = { x: 0, y: 0 };
-    let initialPinchDistance = 0;
-    let initialScale = 1;
 
-    // Mouse controls
     renderer.domElement.addEventListener('mousedown', (e) => {
         isDragging = true;
         previousMousePosition = { x: e.clientX, y: e.clientY };
@@ -461,68 +325,33 @@ function setup3DControls() {
         isDragging = false;
     });
 
-    renderer.domElement.addEventListener('click', (e) => {
-        const rect = renderer.domElement.getBoundingClientRect();
-        
-        mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-        mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    renderer.domElement.addEventListener('click', onNodeClick);
 
-        raycaster.setFromCamera(mouse, camera);
-        const intersects = raycaster.intersectObjects(nodes);
-
-        if (intersects.length > 0) {
-            onNodeSelect(intersects[0].object);
-        }
-    });
-
-    // Mouse wheel zoom
     renderer.domElement.addEventListener('wheel', (e) => {
         e.preventDefault();
         camera.position.z += e.deltaY * 0.01;
         camera.position.z = Math.max(5, Math.min(100, camera.position.z));
     });
 
-    // Touch controls for mobile
-    renderer.domElement.addEventListener('touchstart', (e) => {
-        if (e.touches.length >= 2) {
-            e.preventDefault();
-        }
-        
-        if (e.touches.length === 2) {
-            // Pinch gesture start
-            const dx = e.touches[0].clientX - e.touches[1].clientX;
-            const dy = e.touches[0].clientY - e.touches[1].clientY;
-            initialPinchDistance = Math.sqrt(dx * dx + dy * dy);
-            initialScale = graphGroup.scale.x;
-        } else if (e.touches.length === 1) {
-            isDragging = true;
-            previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-        }
-    });
+    // Touch controls
+    let touchStartDistance = 0;
 
     renderer.domElement.addEventListener('touchmove', (e) => {
-        if (e.touches.length >= 2) {
-            e.preventDefault();
-        }
+        e.preventDefault();
         
         if (e.touches.length === 2) {
-            // Pinch to zoom
             const dx = e.touches[0].clientX - e.touches[1].clientX;
             const dy = e.touches[0].clientY - e.touches[1].clientY;
             const distance = Math.sqrt(dx * dx + dy * dy);
             
-            if (initialPinchDistance) {
-                const scaleFactor = distance / initialPinchDistance;
-                const newScale = initialScale * scaleFactor;
-                
-                // Limit scaling
-                const minScale = 0.1;
-                const maxScale = 5;
-                
-                graphGroup.scale.setScalar(Math.max(minScale, Math.min(maxScale, newScale)));
+            if (touchStartDistance) {
+                const delta = distance - touchStartDistance;
+                camera.position.z -= delta * 0.01;
+                camera.position.z = Math.max(5, Math.min(100, camera.position.z));
             }
-        } else if (e.touches.length === 1 && isDragging) {
-            // Single touch rotation
+            
+            touchStartDistance = distance;
+        } else if (e.touches.length === 1) {
             const deltaX = e.touches[0].clientX - previousMousePosition.x;
             const deltaY = e.touches[0].clientY - previousMousePosition.y;
 
@@ -533,115 +362,60 @@ function setup3DControls() {
         }
     });
 
-    renderer.domElement.addEventListener('touchend', (e) => {
-        isDragging = false;
-        initialPinchDistance = 0;
-        
-        // Single tap for node selection
-        if (e.touches.length === 0 && e.changedTouches.length === 1) {
-            const touch = e.changedTouches[0];
-            const rect = renderer.domElement.getBoundingClientRect();
-            
-            mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
-            mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+    renderer.domElement.addEventListener('touchend', () => {
+        touchStartDistance = 0;
+    });
 
-            raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects(nodes);
-
-            if (intersects.length > 0) {
-                onNodeSelect(intersects[0].object);
-            }
+    renderer.domElement.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+            previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
         }
     });
 }
 
-function onNodeSelect(node) {
-    // Deselect previous node
+function onNodeClick(event) {
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(nodes);
+
     if (selectedNode) {
         selectedNode.material.emissiveIntensity = 0.3;
         selectedNode.scale.set(1, 1, 1);
     }
-    
-    // Select new node
-    selectedNode = node;
-    selectedNode.material.emissiveIntensity = 0.8;
-    selectedNode.scale.set(1.5, 1.5, 1.5);
-    
-    // Show node info
-    displayNodeInfo(node.userData);
-    
-    // Make sure info panel is visible on mobile
-    document.getElementById('node-info').style.display = 'block';
-    
-    // Visual feedback
-    const originalColor = nodeColors[node.userData.type] || nodeColors.default;
-    node.material.color.setHex(0xffffff);
-    setTimeout(() => {
-        node.material.color.setHex(originalColor);
-    }, 300);
+
+    if (intersects.length > 0) {
+        selectedNode = intersects[0].object;
+        selectedNode.material.emissiveIntensity = 0.6;
+        selectedNode.scale.set(1.3, 1.3, 1.3);
+        displayNodeInfo(selectedNode.userData);
+    }
 }
 
 function displayNodeInfo(data) {
     let html = `
-        <div class="info-header">
+        <div style="margin-bottom: 10px;">
             <strong>Type:</strong> ${data.type}
         </div>
-        <div class="info-item">
-            <strong>Label:</strong> ${data.label || 'No label'}
+        <div style="margin-bottom: 10px;">
+            <strong>Label:</strong> ${data.label}
         </div>
     `;
 
     if (data.source_doc) {
-        html += `<div class="info-item"><strong>Source:</strong> ${data.source_doc}</div>`;
+        html += `<div style="margin-bottom: 10px;"><strong>Source:</strong> ${data.source_doc}</div>`;
     }
 
     if (data.properties) {
-        html += '<div class="info-section"><strong>Properties:</strong></div>';
+        html += '<div style="margin-top: 10px;"><strong>Properties:</strong></div>';
         for (const [key, value] of Object.entries(data.properties)) {
-            let displayValue = value;
-            if (Array.isArray(value)) {
-                displayValue = value.join(', ');
-            } else if (typeof value === 'object') {
-                displayValue = JSON.stringify(value, null, 2);
-            }
+            const displayValue = Array.isArray(value) ? value.join(', ') : value;
             html += `<div class="property"><strong>${key}:</strong> ${displayValue}</div>`;
         }
     }
 
-    // Add some CSS for better mobile display
-    const style = document.createElement('style');
-    style.textContent = `
-        .info-header { font-size: 1.1em; margin-bottom: 8px; color: #4ecdc4; }
-        .info-item { margin-bottom: 6px; }
-        .info-section { margin-top: 12px; margin-bottom: 6px; color: #ff6b6b; }
-        .property { margin-left: 10px; margin-bottom: 4px; font-size: 0.9em; word-break: break-word; }
-        #node-info {
-            display: block !important;
-            position: fixed;
-            bottom: 120px;
-            left: 10px;
-            right: 10px;
-            max-height: 30vh;
-            overflow-y: auto;
-            background: rgba(10, 10, 10, 0.95);
-            border: 1px solid #4ecdc4;
-            padding: 15px;
-            z-index: 1000;
-            border-radius: 8px;
-            color: white;
-            font-family: Arial, sans-serif;
-            font-size: 14px;
-        }
-    `;
-    
-    // Remove existing style if any
-    const existingStyle = document.querySelector('#node-info-style');
-    if (existingStyle) existingStyle.remove();
-    style.id = 'node-info-style';
-    document.head.appendChild(style);
-    
     document.getElementById('node-info').innerHTML = html;
-    document.getElementById('node-info').scrollTop = 0;
 }
 
 function renderAR(timestamp, frame) {
@@ -689,9 +463,10 @@ function animate3D() {
     requestAnimationFrame(animate3D);
 
     // Gentle rotation
-    if (graphGroup) {
-        graphGroup.rotation.y += 0.001;
-    }
+    nodes.forEach(node => {
+        node.rotation.x += 0.001;
+        node.rotation.y += 0.001;
+    });
 
     renderer.render(scene, camera);
 }
@@ -703,45 +478,35 @@ function showUI() {
     if (currentMode === '3d') {
         document.querySelector('.legend').style.display = 'block';
     }
-    
-    // Ensure node info is properly displayed
-    document.getElementById('node-info').style.display = 'block';
 }
 
 window.resetView = function() {
     if (currentMode === '3d') {
         camera.position.set(0, 0, 30);
         graphGroup.rotation.set(0, 0, 0);
-        graphGroup.scale.set(1, 1, 1);
-    } else if (currentMode === 'ar') {
-        graphGroup.scale.set(1, 1, 1);
     }
     
-    if (selectedNode) {
-        selectedNode.material.emissiveIntensity = 0.3;
-        selectedNode.scale.set(1, 1, 1);
-        selectedNode = null;
-    }
+    nodes.forEach(n => {
+        n.material.emissiveIntensity = 0.3;
+        n.scale.set(1, 1, 1);
+    });
     
-    document.getElementById('node-info').innerHTML = 'Tap on a node to see details';
-    document.getElementById('node-info').style.display = 'block';
+    document.getElementById('node-info').innerHTML = 'Click on a node to see details';
 };
 
 window.zoomIn = function() {
     if (currentMode === '3d') {
         camera.position.z = Math.max(5, camera.position.z - 3);
-    } else if (currentMode === 'ar' && graphGroup.visible) {
-        const newScale = graphGroup.scale.x * 1.2;
-        graphGroup.scale.setScalar(Math.max(0.1, Math.min(5, newScale)));
+    } else if (currentMode === 'ar') {
+        graphGroup.scale.multiplyScalar(1.2);
     }
 };
 
 window.zoomOut = function() {
     if (currentMode === '3d') {
         camera.position.z = Math.min(100, camera.position.z + 3);
-    } else if (currentMode === 'ar' && graphGroup.visible) {
-        const newScale = graphGroup.scale.x * 0.8;
-        graphGroup.scale.setScalar(Math.max(0.1, Math.min(5, newScale)));
+    } else if (currentMode === 'ar') {
+        graphGroup.scale.multiplyScalar(0.8);
     }
 };
 
@@ -750,58 +515,7 @@ window.exitMode = function() {
 };
 
 window.addEventListener('resize', () => {
-    if (camera && renderer) {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-    }
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
 });
-
-// Add this to help with mobile debugging
-window.addEventListener('orientationchange', () => {
-    setTimeout(() => {
-        if (camera && renderer) {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
-    }, 200);
-});
-
-// Add touch-friendly CSS for mobile controls
-const mobileCSS = `
-    #controls button {
-        min-width: 50px;
-        min-height: 50px;
-        padding: 12px;
-        margin: 8px;
-        font-size: 18px;
-        background: rgba(30, 30, 30, 0.9);
-        border: 2px solid #4ecdc4;
-        border-radius: 10px;
-        color: white;
-        cursor: pointer;
-    }
-    
-    #controls button:hover, #controls button:active {
-        background: rgba(78, 205, 196, 0.3);
-    }
-    
-    #mode-indicator {
-        font-size: 20px;
-        padding: 12px;
-        background: rgba(30, 30, 30, 0.9);
-        border-radius: 8px;
-        margin: 10px;
-    }
-    
-    .legend-item {
-        padding: 8px 12px;
-        margin: 5px;
-        font-size: 14px;
-    }
-`;
-
-const styleEl = document.createElement('style');
-styleEl.textContent = mobileCSS;
-document.head.appendChild(styleEl);
