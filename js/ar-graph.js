@@ -11,6 +11,7 @@ let currentMode = null;
 let reticle;
 let hitTestSource = null;
 let hitTestSourceRequested = false;
+let controller = null;
 
 const nodeColors = {
     'Document': 0xff6b6b,
@@ -142,8 +143,12 @@ function initARScene() {
     // Setup graph
     createGraph();
 
-    // Touch controls for AR
+    // Setup AR controls with interaction
     setupARControls();
+
+    // Initialize raycasting for AR
+    raycaster = new THREE.Raycaster();
+    mouse = new THREE.Vector2();
 
     // Start animation
     renderer.setAnimationLoop(renderAR);
@@ -286,9 +291,75 @@ function createGraph() {
 }
 
 function setupARControls() {
-    const controller = renderer.xr.getController(0);
+    // Create controller for interaction
+    controller = renderer.xr.getController(0);
     controller.addEventListener('select', onARSelect);
+    controller.addEventListener('selectstart', onARSelectStart);
+    controller.addEventListener('selectend', onARSelectEnd);
     scene.add(controller);
+
+    // Add touch events for mobile AR
+    renderer.domElement.addEventListener('touchstart', handleTouchStart, { passive: false });
+    renderer.domElement.addEventListener('touchmove', handleTouchMove, { passive: false });
+    renderer.domElement.addEventListener('touchend', handleTouchEnd);
+}
+
+function handleTouchStart(e) {
+    e.preventDefault();
+    
+    if (currentMode === 'ar' && e.touches.length === 2) {
+        // Pinch gesture start
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        renderer.domElement.userData.pinchStartDistance = distance;
+        renderer.domElement.userData.pinchStartScale = graphGroup.scale.x;
+    }
+    
+    if (e.touches.length === 1 && graphGroup.visible) {
+        // Single touch - check for node selection
+        const touch = e.touches[0];
+        const rect = renderer.domElement.getBoundingClientRect();
+        
+        mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+        
+        // Update raycaster
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObjects(nodes);
+        
+        if (intersects.length > 0) {
+            onNodeSelect(intersects[0].object);
+            e.preventDefault();
+        }
+    }
+}
+
+function handleTouchMove(e) {
+    e.preventDefault();
+    
+    if (currentMode === 'ar' && e.touches.length === 2 && graphGroup.visible) {
+        // Pinch to zoom
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (renderer.domElement.userData.pinchStartDistance) {
+            const scaleFactor = distance / renderer.domElement.userData.pinchStartDistance;
+            const newScale = renderer.domElement.userData.pinchStartScale * scaleFactor;
+            
+            // Limit scaling
+            const minScale = currentMode === 'ar' ? 0.3 : 0.1;
+            const maxScale = currentMode === 'ar' ? 3 : 5;
+            
+            graphGroup.scale.setScalar(Math.max(minScale, Math.min(maxScale, newScale)));
+        }
+    }
+}
+
+function handleTouchEnd(e) {
+    renderer.domElement.userData.pinchStartDistance = null;
+    renderer.domElement.userData.pinchStartScale = null;
 }
 
 function onARSelect() {
@@ -297,13 +368,33 @@ function onARSelect() {
         graphGroup.position.setFromMatrixPosition(reticle.matrix);
         graphGroup.visible = true;
         document.getElementById('ar-instructions').style.display = 'none';
+    } else if (graphGroup.visible) {
+        // Check for node selection in AR mode
+        const tempRaycaster = new THREE.Raycaster();
+        tempRaycaster.setFromXRController(0, renderer.xr.getCamera());
+        const intersects = tempRaycaster.intersectObjects(nodes);
+        
+        if (intersects.length > 0) {
+            onNodeSelect(intersects[0].object);
+        }
     }
+}
+
+function onARSelectStart() {
+    // Optional: Visual feedback when starting selection
+}
+
+function onARSelectEnd() {
+    // Optional: Visual feedback when ending selection
 }
 
 function setup3DControls() {
     let isDragging = false;
     let previousMousePosition = { x: 0, y: 0 };
+    let initialPinchDistance = 0;
+    let initialScale = 1;
 
+    // Mouse controls
     renderer.domElement.addEventListener('mousedown', (e) => {
         isDragging = true;
         previousMousePosition = { x: e.clientX, y: e.clientY };
@@ -325,33 +416,64 @@ function setup3DControls() {
         isDragging = false;
     });
 
-    renderer.domElement.addEventListener('click', onNodeClick);
+    renderer.domElement.addEventListener('click', (e) => {
+        const rect = renderer.domElement.getBoundingClientRect();
+        
+        mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObjects(nodes);
+
+        if (intersects.length > 0) {
+            onNodeSelect(intersects[0].object);
+        }
+    });
+
+    // Mouse wheel zoom
     renderer.domElement.addEventListener('wheel', (e) => {
         e.preventDefault();
         camera.position.z += e.deltaY * 0.01;
         camera.position.z = Math.max(5, Math.min(100, camera.position.z));
     });
 
-    // Touch controls
-    let touchStartDistance = 0;
+    // Touch controls for mobile
+    renderer.domElement.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        
+        if (e.touches.length === 2) {
+            // Pinch gesture start
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            initialPinchDistance = Math.sqrt(dx * dx + dy * dy);
+            initialScale = graphGroup.scale.x;
+        } else if (e.touches.length === 1) {
+            isDragging = true;
+            previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        }
+    });
 
     renderer.domElement.addEventListener('touchmove', (e) => {
         e.preventDefault();
         
         if (e.touches.length === 2) {
+            // Pinch to zoom
             const dx = e.touches[0].clientX - e.touches[1].clientX;
             const dy = e.touches[0].clientY - e.touches[1].clientY;
             const distance = Math.sqrt(dx * dx + dy * dy);
             
-            if (touchStartDistance) {
-                const delta = distance - touchStartDistance;
-                camera.position.z -= delta * 0.01;
-                camera.position.z = Math.max(5, Math.min(100, camera.position.z));
+            if (initialPinchDistance) {
+                const scaleFactor = distance / initialPinchDistance;
+                const newScale = initialScale * scaleFactor;
+                
+                // Limit scaling
+                const minScale = currentMode === 'ar' ? 0.3 : 0.1;
+                const maxScale = currentMode === 'ar' ? 3 : 5;
+                
+                graphGroup.scale.setScalar(Math.max(minScale, Math.min(maxScale, newScale)));
             }
-            
-            touchStartDistance = distance;
-        } else if (e.touches.length === 1) {
+        } else if (e.touches.length === 1 && isDragging) {
+            // Single touch rotation
             const deltaX = e.touches[0].clientX - previousMousePosition.x;
             const deltaY = e.touches[0].clientY - previousMousePosition.y;
 
@@ -362,60 +484,95 @@ function setup3DControls() {
         }
     });
 
-    renderer.domElement.addEventListener('touchend', () => {
-        touchStartDistance = 0;
-    });
+    renderer.domElement.addEventListener('touchend', (e) => {
+        isDragging = false;
+        initialPinchDistance = 0;
+        
+        // Single tap for node selection
+        if (e.touches.length === 0 && e.changedTouches.length === 1) {
+            const touch = e.changedTouches[0];
+            const rect = renderer.domElement.getBoundingClientRect();
+            
+            mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
 
-    renderer.domElement.addEventListener('touchstart', (e) => {
-        if (e.touches.length === 1) {
-            previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(nodes);
+
+            if (intersects.length > 0) {
+                onNodeSelect(intersects[0].object);
+            }
         }
     });
 }
 
-function onNodeClick(event) {
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
-    raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObjects(nodes);
-
+function onNodeSelect(node) {
+    // Deselect previous node
     if (selectedNode) {
         selectedNode.material.emissiveIntensity = 0.3;
         selectedNode.scale.set(1, 1, 1);
     }
-
-    if (intersects.length > 0) {
-        selectedNode = intersects[0].object;
-        selectedNode.material.emissiveIntensity = 0.6;
-        selectedNode.scale.set(1.3, 1.3, 1.3);
-        displayNodeInfo(selectedNode.userData);
-    }
+    
+    // Select new node
+    selectedNode = node;
+    selectedNode.material.emissiveIntensity = 0.8;
+    selectedNode.scale.set(1.5, 1.5, 1.5);
+    
+    // Show node info
+    displayNodeInfo(node.userData);
+    
+    // Visual feedback
+    node.material.color.setHex(0xffffff);
+    setTimeout(() => {
+        const originalColor = nodeColors[node.userData.type] || nodeColors.default;
+        node.material.color.setHex(originalColor);
+    }, 300);
 }
 
 function displayNodeInfo(data) {
     let html = `
-        <div style="margin-bottom: 10px;">
+        <div class="info-header">
             <strong>Type:</strong> ${data.type}
         </div>
-        <div style="margin-bottom: 10px;">
-            <strong>Label:</strong> ${data.label}
+        <div class="info-item">
+            <strong>Label:</strong> ${data.label || 'No label'}
         </div>
     `;
 
     if (data.source_doc) {
-        html += `<div style="margin-bottom: 10px;"><strong>Source:</strong> ${data.source_doc}</div>`;
+        html += `<div class="info-item"><strong>Source:</strong> ${data.source_doc}</div>`;
     }
 
     if (data.properties) {
-        html += '<div style="margin-top: 10px;"><strong>Properties:</strong></div>';
+        html += '<div class="info-section"><strong>Properties:</strong></div>';
         for (const [key, value] of Object.entries(data.properties)) {
-            const displayValue = Array.isArray(value) ? value.join(', ') : value;
+            let displayValue = value;
+            if (Array.isArray(value)) {
+                displayValue = value.join(', ');
+            } else if (typeof value === 'object') {
+                displayValue = JSON.stringify(value, null, 2);
+            }
             html += `<div class="property"><strong>${key}:</strong> ${displayValue}</div>`;
         }
     }
 
+    // Add some CSS for better mobile display
+    const style = document.createElement('style');
+    style.textContent = `
+        .info-header { font-size: 1.1em; margin-bottom: 8px; color: #4ecdc4; }
+        .info-item { margin-bottom: 6px; }
+        .info-section { margin-top: 12px; margin-bottom: 6px; color: #ff6b6b; }
+        .property { margin-left: 10px; margin-bottom: 4px; font-size: 0.9em; word-break: break-word; }
+    `;
+    
+    // Remove existing style if any
+    const existingStyle = document.querySelector('#node-info-style');
+    if (existingStyle) existingStyle.remove();
+    style.id = 'node-info-style';
+    document.head.appendChild(style);
+    
     document.getElementById('node-info').innerHTML = html;
+    document.getElementById('node-info').scrollTop = 0;
 }
 
 function renderAR(timestamp, frame) {
@@ -463,10 +620,9 @@ function animate3D() {
     requestAnimationFrame(animate3D);
 
     // Gentle rotation
-    nodes.forEach(node => {
-        node.rotation.x += 0.001;
-        node.rotation.y += 0.001;
-    });
+    if (graphGroup) {
+        graphGroup.rotation.y += 0.001;
+    }
 
     renderer.render(scene, camera);
 }
@@ -484,20 +640,24 @@ window.resetView = function() {
     if (currentMode === '3d') {
         camera.position.set(0, 0, 30);
         graphGroup.rotation.set(0, 0, 0);
+        graphGroup.scale.set(1, 1, 1);
+    } else if (currentMode === 'ar') {
+        graphGroup.scale.set(1, 1, 1);
     }
     
-    nodes.forEach(n => {
-        n.material.emissiveIntensity = 0.3;
-        n.scale.set(1, 1, 1);
-    });
+    if (selectedNode) {
+        selectedNode.material.emissiveIntensity = 0.3;
+        selectedNode.scale.set(1, 1, 1);
+        selectedNode = null;
+    }
     
-    document.getElementById('node-info').innerHTML = 'Click on a node to see details';
+    document.getElementById('node-info').innerHTML = 'Tap on a node to see details';
 };
 
 window.zoomIn = function() {
     if (currentMode === '3d') {
         camera.position.z = Math.max(5, camera.position.z - 3);
-    } else if (currentMode === 'ar') {
+    } else if (currentMode === 'ar' && graphGroup.visible) {
         graphGroup.scale.multiplyScalar(1.2);
     }
 };
@@ -505,7 +665,7 @@ window.zoomIn = function() {
 window.zoomOut = function() {
     if (currentMode === '3d') {
         camera.position.z = Math.min(100, camera.position.z + 3);
-    } else if (currentMode === 'ar') {
+    } else if (currentMode === 'ar' && graphGroup.visible) {
         graphGroup.scale.multiplyScalar(0.8);
     }
 };
@@ -515,7 +675,20 @@ window.exitMode = function() {
 };
 
 window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    if (camera && renderer) {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+});
+
+// Add this to help with mobile debugging
+window.addEventListener('orientationchange', () => {
+    setTimeout(() => {
+        if (camera && renderer) {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+    }, 200);
 });
